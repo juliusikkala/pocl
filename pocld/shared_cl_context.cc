@@ -1696,17 +1696,19 @@ int SharedCLContext::buildOrLinkProgram(
     // for all.
     assert(PlatBinaries.size() >= 1);
 
-    // Annoyingly cl::Program constructor expects 'char' whereas Binaries
-    // come with an 'unsigned char' element type. Perhaps just copy it here
-    // to avoid problems.
-    const std::vector<char> &IL = reinterpret_cast<const std::vector<char> &>(
-        (*InputBinaries.begin()).second);
+    // cl::Program's IL constructor only accepts a std::vector<char>, but the
+    // binaries from the client have an 'unsigned char' element type;
+    // clCreateProgramWithIL() only needs a pointer and a length.
+    const std::vector<unsigned char> &IL = (*InputBinaries.begin()).second;
 
-    clProgramPtr pp(new cl::Program(ContextWithAllDevices, IL, false, &err));
+    cl_program ILProgram = clCreateProgramWithIL(ContextWithAllDevices.get(),
+                                                 IL.data(), IL.size(), &err);
     if (err != CL_SUCCESS) {
       POCL_MSG_ERR("clCreateProgramWithIL() failed\n");
       return err;
     }
+
+    clProgramPtr pp(new cl::Program(ILProgram));
 
     // The SPIR-V parser inputs a stream of int32_t. Do we need to
     // realign the blob or can we assume it's aligned when reading
